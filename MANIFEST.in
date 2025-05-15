@@ -1,0 +1,13 @@
+include README.md
+include LICENSES/*
+include CHANGELOG.md
+include CITATION.cff
+include .gitignore
+include .dockerignore
+include .pre-commit-config.yaml
+include .readthedocs.yaml
+include .secrets.baseline
+include VERSION
+include pytest.ini
+recursive-include slips *
+recursive-include slips/StratosphereLinuxIPS *
