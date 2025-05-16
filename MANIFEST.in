@@ -9,5 +9,6 @@ include .readthedocs.yaml
 include .secrets.baseline
 include VERSION
 include pytest.ini
+include slips/StratosphereLinuxIPS/VERSION
 recursive-include slips *
 recursive-include slips/StratosphereLinuxIPS *

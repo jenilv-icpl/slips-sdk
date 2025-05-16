@@ -1,0 +1,161 @@
+import subprocess
+import shlex
+import os
+from typing import List, Optional
+
+
+class SlipsManager:
+    """
+    A Python SDK for managing the StratosphereLinuxIPS (SLIPS) binary via subprocess.
+    Provides methods to start SLIPS, query version, clear cache, stop daemon, and more.
+
+    This manager resolves paths relative to the SDK file location and ensures compatibility
+    with SLIPS dependencies like the VERSION file or config YAML.
+    """
+
+    def __init__(self):
+        """
+        Initialize the SlipsManager with resolved binary and config paths
+        relative to the current script location.
+        """
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Paths resolved relative to this SDK file
+        self.binary_path = os.path.abspath(os.path.join(base_dir, "StratosphereLinuxIPS/slips.py"))
+        self.default_config = os.path.abspath(os.path.join(base_dir, "StratosphereLinuxIPS/config/slips.yaml"))
+
+        if not os.path.isfile(self.binary_path):
+            raise FileNotFoundError(f"SLIPS binary not found at {self.binary_path}")
+
+    def _run_command(self, args: List[str], capture_output: bool = False) -> subprocess.CompletedProcess:
+        """
+        Internal helper to run SLIPS command with arguments using subprocess.
+
+        Args:
+            args (List[str]): List of command-line arguments to pass to SLIPS.
+            capture_output (bool): If True, captures stdout and stderr.
+
+        Returns:
+            subprocess.CompletedProcess: The result of the subprocess run.
+
+        Raises:
+            CalledProcessError if command fails.
+        """
+        command = [self.binary_path] + args
+        command_str = " ".join(shlex.quote(str(arg)) for arg in command)
+        print(f"[SLIPS CMD] {command_str}")
+
+        return subprocess.run(
+            command,
+            stdout=subprocess.PIPE if capture_output else None,
+            stderr=subprocess.PIPE if capture_output else None,
+            cwd=os.path.dirname(self.binary_path),  # Important for relative files like VERSION
+            check=True
+        )
+
+    def start(self, file: Optional[str] = None, interface: Optional[str] = None,
+              output_dir: Optional[str] = None, verbose: int = 0, debug: int = 0,
+              blocking: bool = False, daemon: bool = False, save: bool = False, growing: bool = False,
+              pcap_filter: Optional[str] = None):
+        """
+        Start SLIPS with a combination of CLI parameters.
+
+        Args:
+            file (str): Path to PCAP or Zeek logs.
+            interface (str): Network interface to listen on.
+            output_dir (str): Directory to store logs/output.
+            verbose (int): Verbosity level.
+            debug (int): Debug level.
+            blocking (bool): Enable IP blocking (iptables).
+            daemon (bool): Run SLIPS in daemon mode.
+            save (bool): Save analysis DB.
+            growing (bool): Treat input folder as growing.
+            pcap_filter (str): BPF-style filter string.
+        """
+        args = ["-c", self.default_config]
+
+        if file:
+            args += ["-f", file]
+        if interface:
+            args += ["-i", interface]
+        if output_dir:
+            args += ["-o", os.path.expanduser(output_dir)]
+        if verbose:
+            args += ["-v", str(verbose)]
+        if debug:
+            args += ["-e", str(debug)]
+        if blocking:
+            args.append("-p")
+        if daemon:
+            args.append("-D")
+        if save:
+            args.append("-s")
+        if growing:
+            args.append("-g")
+        if pcap_filter:
+            args += ["-F", pcap_filter]
+
+        return self._run_command(args)
+
+    def stop_daemon(self):
+        """
+        Stop SLIPS if running in daemon mode.
+        """
+        return self._run_command(["-S"])
+
+    def kill_all_redis(self):
+        """
+        Kill all unused Redis servers started by SLIPS.
+        """
+        return self._run_command(["-k"])
+
+    def start_multi_instance(self):
+        """
+        Run SLIPS in multi-instance mode without overwriting older runs.
+        """
+        return self._run_command(["-c", self.default_config, "-m"])
+
+    def get_version(self) -> str:
+        """
+        Get the SLIPS version.
+
+        Returns:
+            str: Version string.
+        """
+        result = self._run_command(["-V"], capture_output=True)
+        return result.stdout.decode().strip()
+
+    def clear_blocking_chain(self):
+        """
+        Remove iptables blocking rules set by SLIPS.
+        """
+        return self._run_command(["-cb"])
+
+    def clear_cache(self):
+        """
+        Clear the SLIPS cache database.
+        """
+        return self._run_command(["-cc"])
+
+    def test_mode(self):
+        """
+        Run SLIPS in test mode for unit testing or dry runs.
+        """
+        return self._run_command(["-c", self.default_config, "-t"])
+
+    def start_web_interface(self):
+        """
+        Start the SLIPS web interface module.
+        """
+        return self._run_command(["-c", self.default_config, "-w"])
+
+
+# ✅ Example usage
+if __name__ == "__main__":
+    slips = SlipsManager()
+
+    try:
+        print("Version:", slips.get_version())
+        slips.start(file="test.pcap", verbose=1, debug=1, output_dir="~/output")
+    except Exception as e:
+        print(f"[ERROR] {e}")
