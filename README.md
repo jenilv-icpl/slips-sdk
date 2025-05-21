@@ -19,9 +19,7 @@ Install the SDK via pip:
 
 ```bash
 sudo pip install slips-sdk
-
 sudo slips-setup
-
 ```
 
 ---
