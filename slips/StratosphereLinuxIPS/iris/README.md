@@ -85,7 +85,3 @@ To interact with the peers, you must act as Fides Trust Model and send the peers
 * storageResponse goroutines should wait only for responses from peers where requests were successfully sent (err was nil)
 * implement purging of file metadata after files expire (viz currently not used field `ElapsedAt`)
 * Is the reference basic manager really trimming peers based on their reliability? Need to be checked,
-
-# Related projects
-This project is now a submodule of [StratosphereLinuxIPS](https://github.com/stratosphereips/StratosphereLinuxIPS/)
-

@@ -1,5 +1,3 @@
-# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
-#  SPDX-License-Identifier: GPL-2.0-only
 import dataclasses
 from copy import deepcopy
 from pathlib import Path
@@ -44,37 +42,26 @@ config_prefix = "exp_sup_"
 
 
 def main():
-    # define the directory path for storing configuration files
     sup_dir = Path("../supervised_detection")
-    
-    # iterate over the values in var1
     for v1, v1_value in var1.values():
-        # initialize an empty configuration dictionary and set the value for var1
         config = {}
         config[var1.name] = v1_value
-
-        # generate the experiment id based on var1 and assign it to the configuration
         exp_id = f"{config_prefix}v1_{v1_value}"
         config["id"] = exp_id
-
-        # write the configuration to a file
         write_conf(config, sup_dir / f"{exp_id}.conf")
 
-        # create a new configuration for var2.override
         config_ = deepcopy(config)
         exp_id_ = f"{exp_id}_v2_{var2.override}"
         config_[var2.name] = var2.override
         config_["id"] = exp_id_
         write_conf(config_, sup_dir / f"{exp_id_}.conf")
 
-        # create another configuration for var3.override
         config_ = deepcopy(config)
         exp_id_ = f"{exp_id}_v3_{var3.override}"
         config_[var3.name] = var3.override
         config_["id"] = exp_id_
         write_conf(config_, sup_dir / f"{exp_id_}.conf")
 
-        # iterate over the values in var2 and create a configuration for each
         for v2, v2_value in var2.values():
             config_ = deepcopy(config)
             exp_id_ = f"{exp_id}_v2_{v2_value}_v4_scenario"
@@ -82,7 +69,6 @@ def main():
             config_[var4.name] = var4.override
             config_["id"] = exp_id_
             write_conf(config_, sup_dir / f"{exp_id_}.conf")
-
 
 
 def write_conf(config, file):
