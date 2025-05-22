@@ -23,9 +23,24 @@ class SlipsManager:
         # Paths resolved relative to this SDK file
         self.binary_path = os.path.abspath(os.path.join(base_dir, "StratosphereLinuxIPS/slips.py"))
         self.default_config = os.path.abspath(os.path.join(base_dir, "StratosphereLinuxIPS/config/slips.yaml"))
+        self.db_files = os.path.abspath(os.path.join(base_dir, "StratosphereLinuxIPS/databases/macaddress-db.json"))
 
         if not os.path.isfile(self.binary_path):
             raise FileNotFoundError(f"SLIPS binary not found at {self.binary_path}")
+        
+        if not os.access(self.binary_path, os.X_OK):
+            try:
+                subprocess.run(["chmod", "+x", self.binary_path], check=True)
+                print(f"[INFO] Made slips.py executable: {self.binary_path}")
+            except subprocess.CalledProcessError as e:
+                raise PermissionError(f"Failed to make binary executable: {e}")
+
+        if not os.access(self.db_files, os.X_OK):
+            try:
+                subprocess.run(["touch", self.db_files ])
+                print(f"[INFO] create the db file : {self.db_files}")
+            except subprocess.CalledProcessError as e:
+                raise PermissionError(f"Failed to create db file : {e}")
 
     def _run_command(self, args: List[str], capture_output: bool = False) -> subprocess.CompletedProcess:
         """
@@ -41,7 +56,7 @@ class SlipsManager:
         Raises:
             CalledProcessError if command fails.
         """
-        command = [self.binary_path] + args
+        command = ["sudo", self.binary_path] + args
         command_str = " ".join(shlex.quote(str(arg)) for arg in command)
         print(f"[SLIPS CMD] {command_str}")
 
