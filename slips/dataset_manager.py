@@ -97,3 +97,6 @@ class DatasetManager:
                 fp = os.path.join(dirpath, f)
                 total += os.path.getsize(fp)
         return total
+
+    def get_data_set_path(self):
+        return self.dataset_root
