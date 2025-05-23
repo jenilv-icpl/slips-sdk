@@ -67,16 +67,27 @@ class SlipsManager:
             cwd=os.path.dirname(self.binary_path),  # Important for relative files like VERSION
             check=True
         )
-
-    def start(self, file: Optional[str] = None, interface: Optional[str] = None,
-              output_dir: Optional[str] = None, verbose: int = 0, debug: int = 0,
-              blocking: bool = False, daemon: bool = False, save: bool = False, growing: bool = False,
-              pcap_filter: Optional[str] = None):
+    
+    def start(self,
+            file: Optional[str] = None,
+            file_name: Optional[str] = None,
+            dataset_path: Optional[str] = None,
+            interface: Optional[str] = None,
+            output_dir: Optional[str] = None,
+            verbose: int = 0,
+            debug: int = 0,
+            blocking: bool = False,
+            daemon: bool = False,
+            save: bool = False,
+            growing: bool = False,
+            pcap_filter: Optional[str] = None):
         """
         Start SLIPS with a combination of CLI parameters.
 
         Args:
-            file (str): Path to PCAP or Zeek logs.
+            file (str): Absolute path to PCAP or Zeek logs. Overrides dataset_path + file_name.
+            file_name (str): File name to be used with dataset_path.
+            dataset_path (str): Path to the dataset directory (default is SLIPS dataset dir).
             interface (str): Network interface to listen on.
             output_dir (str): Directory to store logs/output.
             verbose (int): Verbosity level.
@@ -90,7 +101,16 @@ class SlipsManager:
         args = ["-c", self.default_config]
 
         if file:
-            args += ["-f", file]
+            args += ["-f", os.path.expanduser(file)]
+        elif file_name:
+            if not dataset_path:
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                dataset_path = os.path.join(base_dir, "StratosphereLinuxIPS/dataset")
+            full_file_path = os.path.expanduser(os.path.join(dataset_path, file_name))
+            if not os.path.isfile(full_file_path):
+                raise FileNotFoundError(f"Dataset file not found: {full_file_path}")
+            args += ["-f", full_file_path]
+
         if interface:
             args += ["-i", interface]
         if output_dir:
