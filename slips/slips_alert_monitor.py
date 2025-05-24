@@ -2,22 +2,19 @@ import os
 import time
 import json
 import threading
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 
 class SlipsAlertMonitor:
     """
-    High-throughput SDK-style real-time alert monitor for SLIPS alerts.json using watchdog.
+    Real-time SLIPS alert monitor using watchdog.
 
-    Features:
-    - Uses watchdog to monitor file changes in real time
-    - High-throughput design with minimal locking and fast parsing
-    - Parses newline-delimited JSON alerts
-    - Handles malformed JSON gracefully
-    - Lightweight and production-safe
-    - Provides full SDK-style control
+    - Watches alert_file_path for new alerts
+    - Handles delayed file creation
+    - Ignores malformed JSON
+    - Production-safe threading and file access
     """
 
     def __init__(self, alert_file_path: str, on_alert: Callable[[dict], None], start_from_end: bool = True):
@@ -38,6 +35,15 @@ class SlipsAlertMonitor:
                 with self.monitor._lock:
                     self.monitor._read_new_lines()
 
+    def _wait_for_file(self):
+        print(f"[Monitor] Waiting for alert file: {self.alert_file_path}")
+        wait_start = time.time()
+        while not os.path.isfile(self.alert_file_path):
+            time.sleep(1)
+            if int(time.time() - wait_start) % 10 == 0:
+                print(f"[Monitor] Still waiting... ({self.alert_file_path})")
+        print(f"[Monitor] Alert file found: {self.alert_file_path}")
+
     def _read_new_lines(self):
         buffer = self._file.read()
         if not buffer:
@@ -54,11 +60,11 @@ class SlipsAlertMonitor:
                 print(f"[Monitor] Unexpected error: {ex}")
 
     def start(self):
-        if not os.path.isfile(self.alert_file_path):
-            raise FileNotFoundError(f"Alert file not found: {self.alert_file_path}")
+        self._wait_for_file()
 
         self._running = True
         self._file = open(self.alert_file_path, "r", buffering=1)
+
         if self.start_from_end:
             self._file.seek(0, os.SEEK_END)
         else:
@@ -82,9 +88,7 @@ class SlipsAlertMonitor:
         print("[Monitor] Stopped.")
 
     def read_all_existing(self):
-        if not os.path.isfile(self.alert_file_path):
-            raise FileNotFoundError(f"Alert file not found: {self.alert_file_path}")
-
+        self._wait_for_file()
         with open(self.alert_file_path, "r") as f:
             for line in f:
                 try:
