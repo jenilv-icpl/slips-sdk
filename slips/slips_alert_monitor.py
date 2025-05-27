@@ -13,8 +13,8 @@ class SlipsAlertMonitor:
 
     - Watches alert_file_path for new alerts
     - Handles delayed file creation
-    - Ignores malformed JSON
-    - Production-safe threading and file access
+    - Buffers incomplete lines to avoid JSONDecodeError
+    - Thread-safe and production-ready
     """
 
     def __init__(self, alert_file_path: str, on_alert: Callable[[dict], None], start_from_end: bool = True):
@@ -25,6 +25,7 @@ class SlipsAlertMonitor:
         self._observer: Optional[Observer] = None
         self._file = None
         self._lock = threading.Lock()
+        self._buffer = ""
 
     class _AlertFileHandler(FileSystemEventHandler):
         def __init__(self, monitor):
@@ -45,17 +46,27 @@ class SlipsAlertMonitor:
         print(f"[Monitor] Alert file found: {self.alert_file_path}")
 
     def _read_new_lines(self):
-        buffer = self._file.read()
-        if not buffer:
+        chunk = self._file.read()
+        if not chunk:
             return
 
-        lines = buffer.strip().split('\n')
-        for line in lines:
+        self._buffer += chunk
+        lines = self._buffer.split('\n')
+
+        # Retain the last partial line in buffer
+        self._buffer = lines[-1] if self._buffer[-1] != '\n' else ""
+
+        for line in lines[:-1]:
+            if not line.strip():
+                continue
             try:
                 alert = json.loads(line)
                 self.on_alert(alert)
             except json.JSONDecodeError as e:
-                print(f"[Monitor] JSON decode error: {e}. Line skipped.")
+                print(f"[Monitor] JSON decode error: {e}. Retrying in 0.1s...")
+                time.sleep(0.1)
+                self._buffer = line + "\n" + self._buffer  # Re-queue line for retry
+                break
             except Exception as ex:
                 print(f"[Monitor] Unexpected error: {ex}")
 
@@ -92,6 +103,8 @@ class SlipsAlertMonitor:
         with open(self.alert_file_path, "r") as f:
             for line in f:
                 try:
+                    if not line.strip():
+                        continue
                     alert = json.loads(line.strip())
                     self.on_alert(alert)
                 except json.JSONDecodeError:
