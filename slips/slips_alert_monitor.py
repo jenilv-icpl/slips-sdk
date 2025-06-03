@@ -46,27 +46,28 @@ class SlipsAlertMonitor:
         print(f"[Monitor] Alert file found: {self.alert_file_path}")
 
     def _read_new_lines(self):
-        chunk = self._file.read()
-        if not chunk:
-            return
+        while True:
+            line = self._file.readline()
+            if not line:
+                break  # No new data
 
-        self._buffer += chunk
-        lines = self._buffer.split('\n')
+            self._buffer += line
+            if not self._buffer.endswith("\n"):
+                continue  # Wait for full line
 
-        # Retain the last partial line in buffer
-        self._buffer = lines[-1] if self._buffer[-1] != '\n' else ""
+            line_to_process = self._buffer.strip()
+            self._buffer = ""  # Reset buffer after processing full line
 
-        for line in lines[:-1]:
-            if not line.strip():
+            if not line_to_process:
                 continue
+
             try:
-                alert = json.loads(line)
+                alert = json.loads(line_to_process)
                 self.on_alert(alert)
             except json.JSONDecodeError as e:
-                print(f"[Monitor] JSON decode error: {e}. Retrying in 0.1s...")
-                time.sleep(0.1)
-                self._buffer = line + "\n" + self._buffer  # Re-queue line for retry
-                break
+                print(f"[Monitor] JSON decode error: {e}. Buffering and retrying...")
+                # Keep buffer intact and retry next time
+                continue
             except Exception as ex:
                 print(f"[Monitor] Unexpected error: {ex}")
 
