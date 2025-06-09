@@ -9,13 +9,11 @@ from watchdog.events import FileSystemEventHandler
 
 class SlipsIncidentsMonitor:
     """
-    Monitors a file containing a single-line JSON alert for incidents.
+    Monitors a file containing multiple JSON alert lines.
 
-    Features:
-    - Watches the file for modifications using watchdog.
-    - Processes the content only if "Status" is "Incident".
+    - Processes the second last line only (useful for handling delays in file writes).
+    - Calls the callback only if "Status" is "Incident".
     - Deduplicates entries in the 'CorrelID' field.
-    - Calls the provided callback with the cleaned alert data.
     """
 
     def __init__(self, file_path: str, on_incident_alert: Callable[[dict], None]):
@@ -31,35 +29,34 @@ class SlipsIncidentsMonitor:
         def on_modified(self, event):
             if os.path.abspath(event.src_path) == self.monitor.file_path:
                 with self.monitor._lock:
-                    self.monitor._process_file()
+                    self.monitor._process_second_last_line()
 
     def _wait_for_file(self):
-        """Waits until the alert file is present."""
         print(f"[Monitor] Waiting for alert file: {self.file_path}")
         while not os.path.isfile(self.file_path):
             time.sleep(0.5)
         print(f"[Monitor] Alert file detected: {self.file_path}")
 
-    def _process_file(self):
-        """Reads, filters, and processes the JSON alert from the file."""
+    def _process_second_last_line(self):
         try:
             with open(self.file_path, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
+                lines = [line.strip() for line in f if line.strip()]
 
-            if not content:
-                print("[Monitor] File is empty.")
+            if len(lines) < 2:
+                print("[Monitor] Not enough lines to process second last.")
                 return
 
-            alert = json.loads(content)
+            target_line = lines[-2]  # Second last line
+
+            alert = json.loads(target_line)
 
             if alert.get("Status") != "Incident":
                 print("[Monitor] Ignoring non-Incident alert.")
                 return
 
-            correl_ids = alert.get("CorrelID")
-            if isinstance(correl_ids, list):
+            if isinstance(alert.get("CorrelID"), list):
                 seen = set()
-                alert["CorrelID"] = [cid for cid in correl_ids if not (cid in seen or seen.add(cid))]
+                alert["CorrelID"] = [cid for cid in alert["CorrelID"] if not (cid in seen or seen.add(cid))]
 
             self.on_incident_alert(alert)
 
@@ -69,9 +66,8 @@ class SlipsIncidentsMonitor:
             print(f"[Monitor] Unexpected error: {e}")
 
     def start(self):
-        """Starts monitoring the alert file."""
         self._wait_for_file()
-        self._process_file()
+        self._process_second_last_line()
 
         handler = self._FileModifiedHandler(self)
         self._observer = Observer(timeout=0.2)
@@ -81,7 +77,6 @@ class SlipsIncidentsMonitor:
         print(f"[Monitor] Monitoring started: {self.file_path}")
 
     def stop(self):
-        """Stops monitoring the alert file."""
         if self._observer:
             self._observer.stop()
             self._observer.join()
