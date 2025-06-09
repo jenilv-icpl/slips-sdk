@@ -16,6 +16,7 @@ class SlipsIncidentsMonitor:
     - Only triggers callback if 'Status' is 'Incident'.
     - Deduplicates entries in the 'CorrelID' field while preserving order.
     - Parses 'Note' if it's a JSON string.
+    - Emits updated alert as clean JSON.
     """
 
     def __init__(self, file_path: str, on_incident_alert: Callable[[dict], None]):
@@ -56,12 +57,12 @@ class SlipsIncidentsMonitor:
                 return
 
             # Deduplicate CorrelID while preserving order
-            correl_ids = alert.get("CorrelID")
+            correl_ids = alert.get("CorrelID", [])
             if isinstance(correl_ids, list):
                 seen = set()
                 alert["CorrelID"] = [cid for cid in correl_ids if not (cid in seen or seen.add(cid))]
 
-            # Parse Note field if it's a JSON string
+            # Parse 'Note' field if it's a JSON string
             note = alert.get("Note")
             if isinstance(note, str):
                 try:
@@ -76,7 +77,9 @@ class SlipsIncidentsMonitor:
             print(f"CreateTime : {alert.get('CreateTime')}")
             print(f"Analyzer   : {alert.get('Analyzer', {}).get('IP')}, {alert.get('Analyzer', {}).get('Name')}")
             print(f"CorrelIDs  : {len(alert.get('CorrelID', []))} unique entries")
-            print(f"Threat     : {alert.get('Note', {}).get('accumulated_threat_level', 'N/A')}\n")
+            print(f"Threat     : {alert.get('Note', {}).get('accumulated_threat_level', 'N/A')}")
+            print(f"\n✅ Updated JSON:")
+            print(json.dumps(alert, separators=(",", ":")))  # Clean single-line output
 
             self.on_incident_alert(alert)
 
