@@ -11,9 +11,11 @@ class SlipsIncidentsMonitor:
     """
     Monitors a file containing multiple JSON alert lines.
 
-    - Processes the second last line only (useful for handling delays in file writes).
-    - Calls the callback only if "Status" is "Incident".
-    - Deduplicates entries in the 'CorrelID' field.
+    Features:
+    - Processes the second last JSON line from the file.
+    - Only triggers callback if 'Status' is 'Incident'.
+    - Deduplicates entries in the 'CorrelID' field while preserving order.
+    - Parses 'Note' if it's a JSON string.
     """
 
     def __init__(self, file_path: str, on_incident_alert: Callable[[dict], None]):
@@ -46,17 +48,35 @@ class SlipsIncidentsMonitor:
                 print("[Monitor] Not enough lines to process second last.")
                 return
 
-            target_line = lines[-2]  # Second last line
-
-            alert = json.loads(target_line)
+            line = lines[-2]  # Process second last line
+            alert = json.loads(line)
 
             if alert.get("Status") != "Incident":
-                print("[Monitor] Ignoring non-Incident alert.")
+                print(f"[Monitor] Ignored non-Incident status: {alert.get('Status')}")
                 return
 
-            if isinstance(alert.get("CorrelID"), list):
+            # Deduplicate CorrelID while preserving order
+            correl_ids = alert.get("CorrelID")
+            if isinstance(correl_ids, list):
                 seen = set()
-                alert["CorrelID"] = [cid for cid in alert["CorrelID"] if not (cid in seen or seen.add(cid))]
+                alert["CorrelID"] = [cid for cid in correl_ids if not (cid in seen or seen.add(cid))]
+
+            # Parse Note field if it's a JSON string
+            note = alert.get("Note")
+            if isinstance(note, str):
+                try:
+                    alert["Note"] = json.loads(note)
+                except json.JSONDecodeError:
+                    print("[Monitor] Failed to parse 'Note' field as JSON.")
+
+            # Optional log
+            print(f"\n🚨 Incident Detected")
+            print(f"ID         : {alert.get('ID')}")
+            print(f"StartTime  : {alert.get('StartTime')}")
+            print(f"CreateTime : {alert.get('CreateTime')}")
+            print(f"Analyzer   : {alert.get('Analyzer', {}).get('IP')}, {alert.get('Analyzer', {}).get('Name')}")
+            print(f"CorrelIDs  : {len(alert.get('CorrelID', []))} unique entries")
+            print(f"Threat     : {alert.get('Note', {}).get('accumulated_threat_level', 'N/A')}\n")
 
             self.on_incident_alert(alert)
 
@@ -71,7 +91,7 @@ class SlipsIncidentsMonitor:
 
         handler = self._FileModifiedHandler(self)
         self._observer = Observer(timeout=0.2)
-        self._observer.schedule(handler, os.path.dirname(self.file_path), recursive=False)
+        self._observer.schedule(handler, path=os.path.dirname(self.file_path), recursive=False)
         self._observer.start()
 
         print(f"[Monitor] Monitoring started: {self.file_path}")
